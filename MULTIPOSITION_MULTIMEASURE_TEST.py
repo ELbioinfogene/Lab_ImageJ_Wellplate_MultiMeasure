@@ -56,8 +56,8 @@ def main():
 	ImageDir_end_search=ImageDir.rfind('\\')
 	ImageDir_root_search=ImageDir.rfind('\\',0,ImageDir_end_search)
 	ImageDir_root_string=ImageDir[0:ImageDir_root_search+1]
-	#No f strings in jython(?)
-	Trace_Folder_Name='NeuronTraces_'+str(DATE_ARRAY[0])+str(DATE_ARRAY[1])+str(DATE_ARRAY[2])+'_'+str(DATE_ARRAY[3])+str(DATE_ARRAY[4])
+	#Build Trace Folder Name from DATE_ARRAY
+	Trace_Folder_Name='NeuronTraces_'+'{}{}{}_{}{}'.format(DATE_ARRAY[0],DATE_ARRAY[1],DATE_ARRAY[2],DATE_ARRAY[3],DATE_ARRAY[4])
 	Trace_Folder_Address=ImageDir_root_string+Trace_Folder_Name
 	#make NeuronTrace folder
 	os.makedirs(Trace_Folder_Address)
@@ -99,7 +99,7 @@ def main():
 			if WELL_POSITIONS==0:
 				#report null
 				print('Null Well')
-		#Clear all windows for next TIF file - disabed for debug
+		#Clear all windows for next TIF file
 		IJ.run("Clear Results");
 		IJ.run("Close All");
 #End of main()
