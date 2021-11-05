@@ -285,8 +285,11 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 		VIDEO_ANIMAL_FILE=open(TXT_FILE_FULL,'w')
 		#write HEADER to txt file
 		VIDEO_ANIMAL_FILE.write(HEADER+'\n')
+		#prepare for getting values and assembling FRAME_LINE
 		MEDIAN_NAME = 'Median'+str(ANIMAL_ID)
 		RAW_INT_NAME = 'RawIntDen'+str(ANIMAL_ID)
+		GENERAL_START = str(WELL)+','+str(CYCLE)+','+str(ANIMAL_ID)+','
+		GENERAL_GEOMETRY = str(X_CENTER)+','+str(Y_CENTER)+','+str(SQAREA)+','
 		#loop through all frames
 		for FRAME in range(0,NUMBER_OF_FRAMES):
 			FRAME_RAW_INT = int(ROI_MEASUREMENTS.getValue(RAW_INT_NAME,FRAME))
@@ -294,29 +297,13 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 			#calculate this frame sqintsub using the frame median, sqintdens, and sqarea
 			FRAME_SQINTSUB = FRAME_RAW_INT - (SQAREA*FRAME_MEDIAN)
 			#build frame measurement line:
-			#WELL CYCLE ANIMALID FRAME X Y SQAREA SQINTDENS BGMEDIAN SQINTSUB
-			FRAME_LINE = str(WELL)+','+str(CYCLE)+','+str(ANIMAL_ID)+','+str(FRAME)+','+str(X_CENTER)+','+str(Y_CENTER)+','+str(SQAREA)+','+str(FRAME_RAW_INT)+','+str(FRAME_MEDIAN)+','+str(FRAME_SQINTSUB)+'\n'
+			FRAME_MEASUREMENTS = str(FRAME_RAW_INT)+','+str(FRAME_MEDIAN)+','+str(FRAME_SQINTSUB)
+			#Build FRAME_LINE from GENERAL_ and FRAME_ strings
+			#[WELL CYCLE ANIMALID] FRAME [X Y SQAREA] [SQINTDENS BGMEDIAN SQINTSUB]
+			FRAME_LINE = GENERAL_START+str(FRAME)+','+GENERAL_GEOMETRY+FRAME_MEASUREMENTS+'\n'
 			#write line to txt file
 			VIDEO_ANIMAL_FILE.write(FRAME_LINE)
 		VIDEO_ANIMAL_FILE.close()
-
-	#DEBUG
-	#sqintdens = RawIntDen column in measurements
-	#bgmedian = Median Column in measurements
-	#sqintsub = sqintdens - (sqarea * bgmedian);
-	#print(ANIMAL+1)
-	#print('X:{} Y:{}'.format(X_CENTER,Y_CENTER))
-	#COLUMN_INDEX=ROI_MEASUREMENTS.getColumnHeadings()
-	#print(NUMBER_OF_ANIMALS)
-	#ANIMAL_1_SPOT = COLUMN_INDEX.find('Median1')
-	#ANIMAL_1_MEDIAN=ROI_MEASUREMENTS.getColumn(ANIMAL_1_SPOT)
-	#print(len(ANIMAL_1_MEDIAN))
-	#print(dir(ROI_MEASUREMENTS))
-	#print(ROI_MEASUREMENTS.size())
-	#print(ROI_MEASUREMENTS.getColumnHeadings())
-	#ROI_MEASUREMENTS.show('Results')
-	#print(REGION_MANAGER.getROIs())
-	#/\ This returns a dictionary'''
 #END OF FUNCTIONS
 ###
 
