@@ -33,11 +33,13 @@ def main():
 	#when the well number is entered the result is a dictionary of animal positions
 	#(with support for multiple positions per animal)
 	POSITION_LOOK_UP={}
+	ANIMAL_TOTAL=0
 	for foldername, subfolder, filename in os.walk(PositionDir):
 		for CHECK_FILE in filename:
 			if CHECK_FILE.find('.txt')!=0:
 				THIS_FILE_ADDRESS = foldername + CHECK_FILE
-				(THIS_WELL_ID,THIS_WELL_POS,NULL_TEST)=LoadPositionFile(THIS_FILE_ADDRESS)
+				(THIS_WELL_ID,THIS_WELL_POS,NULL_TEST,WELL_COUNT)=LoadPositionFile(THIS_FILE_ADDRESS)
+				ANIMAL_TOTAL = ANIMAL_TOTAL+WELL_COUNT
 			if NULL_TEST==0:
 				NEW_ENTRY = {THIS_WELL_ID:THIS_WELL_POS}
 				POSITION_LOOK_UP.update(NEW_ENTRY)
@@ -63,6 +65,9 @@ def main():
 	os.makedirs(Trace_Folder_Address)
 	###
 
+	WELL_COUNT=0
+	VIDEO_COUNT=0
+	FILES_GENERATED=0
 	#loop through all video files to produce measurements:
 	#regex for isolating video properties
 	VIDEO_INDEX=re.compile(r'_well(\d*)cycle(\d*)mov(\d*).tif')
@@ -74,6 +79,7 @@ def main():
 		#avoid reading the root (a non int '' string)
 		if bool(well_folder) is not False:
 			well_number = int(well_folder)
+			WELL_COUNT=WELL_COUNT+1
 			#use POSITION_LOOK_UP to check IF this well is NULL
 			WELL_POSITIONS = POSITION_LOOK_UP[well_number]
 			#IF NOT null - process all videos
@@ -91,10 +97,12 @@ def main():
 						if WELL_ID==well_number:
 							TIF_FILE_ADDRESS = foldername+'\\'+THIS_FILE
 							print('Measuring Well {} Cycle {} Trial {}'.format(WELL_ID,CYCLE_ID,TRIAL_ID))
+							VIDEO_COUNT=VIDEO_COUNT+1
 							#perform measurements for this video and save measurements to file (see function code)
 							(ROI_MEASUREMENTS,ROI_DB) = MULTI_ROI_MEASURE(TIF_FILE_ADDRESS,POSITION_LOOK_UP,WELL_ID,CYCLE_ID)
 							ROI_MEASUREMENTS.show('Results')
-							PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,ROI_DB,WELL_ID,CYCLE_ID,THIS_FILE,Trace_Folder_Address)
+							FILES_WRITTEN = PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,ROI_DB,WELL_ID,CYCLE_ID,THIS_FILE,Trace_Folder_Address)
+							FILES_GENERATED = FILES_GENERATED + FILES_WRITTEN
 			#IF well is null
 			if WELL_POSITIONS==0:
 				#report null
@@ -102,6 +110,8 @@ def main():
 		#Clear all windows for next TIF file
 		IJ.run("Clear Results");
 		IJ.run("Close All");
+	#end of video loop
+	print('Measured {} animals in {} wells across {} videos.\nWrote data to {} neuron trace txt files'.format(ANIMAL_TOTAL,WELL_COUNT,VIDEO_COUNT,FILES_GENERATED))
 #End of main()
 ###
 
@@ -116,6 +126,7 @@ def LoadPositionFile(file_address):
 	VERBOSE_INPUT=0
 	POSITION_DICTIONARY = {}
 	IS_NULL = 0;
+	ANIMALS_IN_WELL=0
 	#parse string RAW_POS_TXT
 	for N,S in enumerate(RAW_POS_TXT):
 		#N is the line number
@@ -132,7 +143,7 @@ def LoadPositionFile(file_address):
 			ANIMAL_X = LINE_VALUES[1]
 			ANIMAL_Y = LINE_VALUES[2]
 			ANIMAL_ID = LINE_VALUES[3]
-			#revised format - specific cycle used for selection
+		#revised format - specific cycle used for selection
 		if LINE_SIZE==5:
 			WELL_ID = LINE_VALUES[0]
 			ANIMAL_X = LINE_VALUES[1]
@@ -140,8 +151,8 @@ def LoadPositionFile(file_address):
 			ANIMAL_ID = LINE_VALUES[3]
 			ANIMAL_CYCLE = LINE_VALUES[4]
 			VERBOSE_INPUT=1
-			#verbose format - specifies cycle, trial, and frame
-			#For now only cycle is used for multipositions        
+		#verbose format - specifies cycle, trial, and frame
+		#For now only cycle is used for multipositions        
 		if LINE_SIZE==7:
 			WELL_ID = LINE_VALUES[0]
 			ANIMAL_X = LINE_VALUES[1]
@@ -151,7 +162,7 @@ def LoadPositionFile(file_address):
 			ANIMAL_TRIAL = LINE_VALUES[5]
 			ANIMAL_FRAME = LINE_VALUES[6]
 			VERBOSE_INPUT=1
-			#Detect null
+		#Detect null well - no animals to measure
 		if N==1 and sum(LINE_VALUES)==0:
 			IS_NULL=1
 		else:
@@ -173,7 +184,8 @@ def LoadPositionFile(file_address):
 					INITIAL_ANIMAL_POSITION = [ANIMAL_X,ANIMAL_Y]
 				ANIMAL_ENTRY = {ANIMAL_ID:[INITIAL_ANIMAL_POSITION]}
 				POSITION_DICTIONARY.update(ANIMAL_ENTRY)
-	return WELL_ID,POSITION_DICTIONARY,IS_NULL
+				ANIMALS_IN_WELL = ANIMALS_IN_WELL+1
+	return WELL_ID,POSITION_DICTIONARY,IS_NULL,ANIMALS_IN_WELL
 #Function working 10/29/21
 #tested with multicycle input 11/3 - working
 ###
@@ -247,6 +259,7 @@ def MULTI_ROI_MEASURE(FULL_IMAGE_FILE,POSITION_DICTIONARY,WELL,CYCLE):
 		#Build region of interest rectangle for this animal
 		THIS_ANIMAL_REGION = Roi(CORNER_X,CORNER_Y,ROI_height,ROI_width)
 		REGION_MANAGER.addRoi(THIS_ANIMAL_REGION)
+		#End of FOR loop of all animals to build ROIs
 	#with ROIs produced for all animals, select them all and perform multiMeasure
 	REGION_MANAGER.runCommand(TIF_IMAGE, 'Select All')
 	MEASUREMENTS = REGION_MANAGER.multiMeasure(TIF_IMAGE)
@@ -261,6 +274,7 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 	#Establish constants
 	NUMBER_OF_FRAMES = ROI_MEASUREMENTS.size()
 	HEADER='well,cycle,animal,frame,x,y,sqarea,sqintdens,bgmedian,sqintsub'
+	FILE_COUNT=0
 	#loop through all animals in this video
 	for ANIMAL,ROI in enumerate(REGION_MANAGER):
 		#indexing starts at 0 - ID's start with 1
@@ -269,7 +283,8 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 		X_corner = int(ROI.getXBase())
 		Y_corner = int(ROI.getYBase())
 		#get height and width data - 
-		#NOTE THIS FUNCTION IS INDEPENDENT OF ROI_height and ROI_width
+		#NOTE: 
+		#THIS FUNCTION IS INDEPENDENT of ROI_height and ROI_width which are defined on lines 18 and 19
 		#this function can also support ROIs of varying size
 		REGION_WIDTH = int(ROI.getFloatWidth())
 		REGION_HEIGHT = int(ROI.getFloatHeight())
@@ -282,9 +297,9 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 		[EXTENSIONLESS_NAME,BLANK] = IMAGE_FILE_NAME.split('.tif')
 		TXT_FILE_NAME = EXTENSIONLESS_NAME + 'an' + str(ANIMAL_ID) + '.txt'
 		TXT_FILE_FULL = OUTPUT_FOLDER+'\\'+TXT_FILE_NAME
-		VIDEO_ANIMAL_FILE=open(TXT_FILE_FULL,'w')
+		TXT_FILE_OF_MEASUREMENTS=open(TXT_FILE_FULL,'w')
 		#write HEADER to txt file
-		VIDEO_ANIMAL_FILE.write(HEADER+'\n')
+		TXT_FILE_OF_MEASUREMENTS.write(HEADER+'\n')
 		#prepare for getting values and assembling FRAME_LINE
 		MEDIAN_NAME = 'Median'+str(ANIMAL_ID)
 		RAW_INT_NAME = 'RawIntDen'+str(ANIMAL_ID)
@@ -302,8 +317,10 @@ def PROCESS_AND_SAVE_MEASUREMENTS(ROI_MEASUREMENTS,REGION_MANAGER,WELL,CYCLE,IMA
 			#[WELL CYCLE ANIMALID] FRAME [X Y SQAREA] [SQINTDENS BGMEDIAN SQINTSUB]
 			FRAME_LINE = GENERAL_START+str(FRAME)+','+GENERAL_GEOMETRY+FRAME_MEASUREMENTS+'\n'
 			#write line to txt file
-			VIDEO_ANIMAL_FILE.write(FRAME_LINE)
-		VIDEO_ANIMAL_FILE.close()
+			TXT_FILE_OF_MEASUREMENTS.write(FRAME_LINE)
+		TXT_FILE_OF_MEASUREMENTS.close()
+		FILE_COUNT = FILE_COUNT+1
+	return FILE_COUNT
 #END OF FUNCTIONS
 ###
 
